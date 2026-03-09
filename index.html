@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fusion Chat - Agenda & Motor</title>
+    <title>Fusion Chat Pro</title>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
     <style>
@@ -15,20 +15,21 @@
         .view.active { display: flex; }
 
         /* Agenda */
-        .header { padding: 20px; background: var(--panel); text-align: center; border-bottom: 1px solid #333; }
-        .contact-card { background: var(--panel); padding: 15px; margin: 10px; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid var(--accent); }
-        .add-form { padding: 20px; background: var(--panel); margin: 10px; border-radius: 10px; }
-        input { background: #252b30; border: none; padding: 12px; color: white; border-radius: 8px; width: 100%; box-sizing: border-box; margin-bottom: 10px; }
+        .header { padding: 20px; background: var(--panel); text-align: center; border-bottom: 1px solid #333; font-weight: bold; color: var(--accent); }
+        .add-form { padding: 15px; background: var(--panel); margin: 10px; border-radius: 12px; }
+        .contact-card { background: var(--panel); padding: 15px; margin: 10px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid var(--accent); }
+        
+        input { background: #252b30; border: none; padding: 12px; color: white; border-radius: 8px; width: 100%; box-sizing: border-box; margin-bottom: 10px; outline: none; }
         button { background: var(--accent); border: none; color: white; padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; }
 
         /* Chat */
-        #chat-window { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 8px; }
-        .msg { padding: 10px 14px; border-radius: 15px; max-width: 75%; font-size: 15px; }
+        #chat-window { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 8px; background: #080a0c; }
+        .msg { padding: 10px 14px; border-radius: 15px; max-width: 75%; font-size: 15px; line-height: 1.4; }
         .out { background: var(--accent); align-self: flex-end; border-bottom-right-radius: 2px; }
         .in { background: #2a2f32; align-self: flex-start; border-bottom-left-radius: 2px; }
         
-        .chat-input-area { padding: 15px; background: var(--panel); display: flex; gap: 10px; }
-        .btn-back { background: transparent; color: var(--accent); font-size: 20px; position: absolute; left: 10px; top: 15px; }
+        .chat-input-area { padding: 15px; background: var(--panel); display: flex; gap: 10px; align-items: center; }
+        .btn-back { background: transparent; color: var(--accent); font-size: 24px; border: none; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -36,27 +37,28 @@
     <div id="view-agenda" class="view active">
         <div class="header">MIS CONTACTOS</div>
         <div class="add-form">
-            <input type="text" id="contact-name" placeholder="Nombre del amigo">
-            <input type="text" id="contact-id" placeholder="ID del amigo">
-            <button onclick="guardarContacto()" style="width:100%">➕ Agregar a Agenda</button>
+            <p style="margin: 0 0 10px 0; font-size: 14px; color: #888;">Añadir amigo:</p>
+            <input type="text" id="contact-name" placeholder="Nombre (ej: Juan)">
+            <input type="text" id="contact-id" placeholder="ID del amigo (ej: juan123)">
+            <button onclick="guardarContacto()" style="width:100%">➕ Guardar Contacto</button>
         </div>
-        <div id="lista-contactos"></div>
+        <div id="lista-contactos" style="overflow-y: auto; flex: 1;"></div>
     </div>
 
     <div id="view-chat" class="view">
-        <div class="header">
-            <button class="btn-back" onclick="irAAgenda()">⇽</button>
+        <div class="header" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 20px;">
+            <button class="btn-back" onclick="irAAgenda()">‹</button>
             <span id="chat-with-name">Nombre</span>
-        </div>
+            <div style="width: 24px;"></div> </div>
         <div id="chat-window"></div>
         <div class="chat-input-area">
-            <input type="text" id="mensaje-txt" placeholder="Escribe un mensaje..." autocomplete="off">
+            <input type="text" id="mensaje-txt" placeholder="Escribe un mensaje..." autocomplete="off" style="margin:0">
             <button onclick="enviarMensaje()">📤</button>
         </div>
     </div>
 
     <script>
-        // 1. CONFIGURACIÓN (Tus datos reales)
+        // 1. TUS CREDENCIALES REALES (De la foto que subiste)
         const firebaseConfig = {
             apiKey: "AIzaSyAq0z3fvEEhFAVcl1YNDtB4rV0Lzdd0pZ0",
             authDomain: "fusionchat-37635.firebaseapp.com",
@@ -67,51 +69,55 @@
             appId: "1:90918145485:web:984896a83873c96d71c884"
         };
 
+        // Inicializar Firebase
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
         
-        const miID = localStorage.getItem('chat_id') || prompt("Tu ID único (ej: azbel):");
-        localStorage.setItem('chat_id', miID);
+        // Tu propio ID
+        const miID = localStorage.getItem('chat_my_id') || prompt("Elige tu propio ID de usuario:");
+        if(miID) localStorage.setItem('chat_my_id', miID);
 
         let chatActualRef = null;
-        let contactoActualID = null;
 
-        // 2. GESTIÓN DE AGENDA
+        // 2. LÓGICA DE AGENDA
         function guardarContacto() {
             const nombre = document.getElementById('contact-name').value;
             const id = document.getElementById('contact-id').value;
             if(!nombre || !id) return;
-            let agenda = JSON.parse(localStorage.getItem('agenda_fusion') || '[]');
+            
+            let agenda = JSON.parse(localStorage.getItem('agenda_v2') || '[]');
             agenda.push({nombre, id});
-            localStorage.setItem('agenda_fusion', JSON.stringify(agenda));
+            localStorage.setItem('agenda_v2', JSON.stringify(agenda));
+            
+            document.getElementById('contact-name').value = "";
+            document.getElementById('contact-id').value = "";
             renderAgenda();
         }
 
         function renderAgenda() {
-            const agenda = JSON.parse(localStorage.getItem('agenda_fusion') || '[]');
+            const agenda = JSON.parse(localStorage.getItem('agenda_v2') || '[]');
             const lista = document.getElementById('lista-contactos');
             lista.innerHTML = "";
             agenda.forEach(c => {
                 lista.innerHTML += `
                     <div class="contact-card">
-                        <span><b>${c.nombre}</b><br><small>${c.id}</small></span>
-                        <button onclick="abrirChat('${c.id}', '${c.nombre}')">Chatear</button>
+                        <span><b>${c.nombre}</b><br><small style="color:#888">${c.id}</small></span>
+                        <button onclick="abrirChat('${c.id}', '${c.nombre}')">Chat</button>
                     </div>`;
             });
         }
 
-        // 3. LÓGICA DE CHAT
+        // 3. LÓGICA DE CHAT PRIVADO
         function abrirChat(suID, suNombre) {
-            contactoActualID = suID;
             document.getElementById('chat-with-name').innerText = suNombre;
             document.getElementById('chat-window').innerHTML = "";
             
-            // Crear un ID de sala único combinando ambos IDs alfabéticamente
+            // Creamos una sala única mezclando IDs alfabéticamente
             const salaID = [miID, suID].sort().join("_");
-            chatActualRef = db.ref('chats/' + salaID);
+            chatActualRef = db.ref('mensajes/' + salaID);
 
-            // Escuchar mensajes
-            chatActualRef.off(); // Limpiar escuchas previas
+            // Escuchar mensajes nuevos
+            chatActualRef.off(); 
             chatActualRef.limitToLast(50).on('child_added', (snap) => {
                 const m = snap.val();
                 dibujarMensaje(m.texto, m.emisor === miID ? 'out' : 'in');
@@ -122,14 +128,15 @@
         }
 
         function enviarMensaje() {
-            const txt = document.getElementById('mensaje-txt').value;
-            if(txt.trim() !== "" && chatActualRef) {
+            const input = document.getElementById('mensaje-txt');
+            const txt = input.value.trim();
+            if(txt !== "" && chatActualRef) {
                 chatActualRef.push({
                     emisor: miID,
                     texto: txt,
-                    fecha: Date.now()
+                    fecha: firebase.database.ServerValue.TIMESTAMP
                 });
-                document.getElementById('mensaje-txt').value = "";
+                input.value = "";
             }
         }
 
@@ -147,8 +154,13 @@
             document.getElementById('view-agenda').classList.add('active');
         }
 
+        // Enviar con Enter
+        document.getElementById('mensaje-txt').addEventListener('keypress', (e) => {
+            if(e.key === 'Enter') enviarMensaje();
+        });
+
         renderAgenda();
     </script>
 </body>
-                                  </html>
+    </html>
     

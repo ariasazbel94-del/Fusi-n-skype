@@ -3,34 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fusion Chat Pro</title>
+    <title>Fusion Chat 10-Digits</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         :root { --bg: #0b0e11; --accent: #00aff0; --panel: #1c2226; --text: #ffffff; }
         body { margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-
-        /* NAVEGACIÓN */
         nav { display: flex; background: var(--panel); border-bottom: 1px solid #333; }
-        nav button { flex: 1; padding: 15px; border: none; background: none; color: #888; font-weight: bold; cursor: pointer; }
+        nav button { flex: 1; padding: 15px; border: none; background: none; color: #888; font-weight: bold; }
         nav button.active { color: var(--accent); border-bottom: 3px solid var(--accent); }
-
-        /* VISTAS */
         .view { display: none; flex: 1; flex-direction: column; padding: 20px; overflow-y: auto; }
         .view.active { display: flex; }
-
-        /* AGENDA */
         .my-id-box { background: var(--panel); padding: 15px; border-radius: 10px; text-align: center; margin-bottom: 20px; border: 1px dashed var(--accent); }
-        .contact-item { background: var(--panel); padding: 15px; border-radius: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid var(--accent); }
+        .contact-item { background: var(--panel); padding: 15px; border-radius: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
         input { background: #252b30; border: none; padding: 12px; color: white; border-radius: 8px; width: 100%; box-sizing: border-box; margin-bottom: 10px; }
-        .btn-add { background: var(--accent); border: none; color: white; padding: 12px; border-radius: 8px; width: 100%; font-weight: bold; }
-
-        /* CHAT */
-        #chat-header { padding: 10px; text-align: center; color: var(--accent); font-weight: bold; border-bottom: 1px solid #333; margin-bottom: 10px; }
         #messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
-        .msg { padding: 10px 14px; border-radius: 15px; max-width: 80%; font-size: 15px; word-wrap: break-word; }
+        .msg { padding: 10px 14px; border-radius: 15px; max-width: 80%; font-size: 15px; }
         .in { background: #2a2f32; align-self: flex-start; }
         .out { background: var(--accent); align-self: flex-end; }
-        .input-area { display: flex; gap: 10px; padding: 15px 0; }
     </style>
 </head>
 <body>
@@ -42,65 +31,46 @@
 
     <div id="view-agenda" class="view active">
         <div class="my-id-box">
-            <small>TU NÚMERO FUSION (10 DÍGITOS):</small>
-            <h2 id="display-my-id" style="letter-spacing: 2px; margin: 5px 0;">...</h2>
+            <small>TU ID FIJO:</small>
+            <h2 id="display-my-id">...</h2>
         </div>
-
         <div style="background: var(--panel); padding: 15px; border-radius: 10px; margin-bottom: 20px;">
-            <input type="text" id="new-name" placeholder="Nombre (ej: Pedro)">
-            <input type="number" id="new-id" placeholder="ID de 10 dígitos">
-            <button class="btn-add" onclick="addContact()">AGREGAR A LA AGENDA</button>
+            <input type="text" id="new-name" placeholder="Nombre">
+            <input type="number" id="new-id" placeholder="ID (10 dígitos)">
+            <button onclick="addContact()" style="width:100%; background:var(--accent); border:none; color:white; padding:12px; border-radius:8px; font-weight:bold;">GUARDAR EN AGENDA</button>
         </div>
-
         <div id="contact-list"></div>
     </div>
 
     <div id="view-chat" class="view">
-        <div id="chat-header">Sin conexión activa</div>
+        <div id="chat-header" style="text-align:center; padding:10px; color:var(--accent)">Selecciona un contacto</div>
         <div id="messages"></div>
-        <div class="input-area">
-            <input type="text" id="chat-input" placeholder="Escribe un mensaje..." style="margin:0">
+        <div style="display:flex; gap:10px; padding-top:15px;">
+            <input type="text" id="chat-input" placeholder="Mensaje..." style="margin:0">
             <button onclick="sendMsg()" style="background:var(--accent); border:none; color:white; padding:10px 20px; border-radius:8px;">📤</button>
         </div>
     </div>
 
     <script>
         let peer, conn;
-        let my10DigitId = localStorage.getItem('fusion_10id');
-
-        // 1. GENERAR ID FIJO DE 10 DÍGITOS
-        if (!my10DigitId) {
-            my10DigitId = Math.floor(1000000000 + Math.random() * 9000000000).toString();
-            localStorage.setItem('fusion_10id', my10DigitId);
-        }
+        let my10DigitId = localStorage.getItem('fusion_10id') || Math.floor(1000000000 + Math.random() * 9000000000).toString();
+        localStorage.setItem('fusion_10id', my10DigitId);
         document.getElementById('display-my-id').innerText = my10DigitId;
 
-        // 2. CONEXIÓN A TU SERVIDOR EN RENDER
-        // Usamos el path '/peerjs' que definiste en tu server.js
         peer = new Peer(my10DigitId, {
             host: 'fusi-n-8wno.onrender.com',
             port: 443,
-            path: '/peerjs', 
-            secure: true,
-            debug: 3
+            path: '/peerjs', // Sincronizado con server.js
+            secure: true
         });
 
-        // Eventos de conexión global
-        peer.on('open', (id) => console.log('Registrado en Render con ID:', id));
-        
         peer.on('connection', (c) => {
             conn = c;
-            setupChatEvents();
+            c.on('data', (data) => appendMsg(data, 'in'));
             switchView('chat');
-            document.getElementById('chat-header').innerText = "Chat con: " + c.peer;
+            document.getElementById('chat-header').innerText = "Conectado con: " + c.peer;
         });
 
-        peer.on('error', (err) => {
-            console.error("Error PeerJS:", err.type);
-            if(err.type === 'peer-unavailable') alert("El contacto no está en línea.");
-        });
-
-        // 3. AGENDA LOCAL
         function addContact() {
             const name = document.getElementById('new-name').value;
             const id = document.getElementById('new-id').value;
@@ -109,66 +79,56 @@
                 contacts.push({ name, id });
                 localStorage.setItem('fusion_contacts', JSON.stringify(contacts));
                 renderContacts();
-                document.getElementById('new-name').value = "";
-                document.getElementById('new-id').value = "";
             }
         }
 
         function renderContacts() {
             const contacts = JSON.parse(localStorage.getItem('fusion_contacts') || '[]');
             const list = document.getElementById('contact-list');
-            list.innerHTML = "<h4>Mis Contactos:</h4>";
+            list.innerHTML = "";
             contacts.forEach(c => {
-                list.innerHTML += `
-                    <div class="contact-item">
-                        <span><b>${c.name}</b><br><small>${c.id}</small></span>
-                        <button onclick="startChat('${c.id}', '${c.name}')" style="background:#28a745; border:none; color:white; padding:8px 12px; border-radius:5px;">Chat</button>
-                    </div>`;
+                list.innerHTML += `<div class="contact-item">
+                    <span><b>${c.name}</b><br>${c.id}</span>
+                    <button onclick="startChat('${c.id}')" style="background:#28a745; border:none; color:white; padding:8px 12px; border-radius:5px;">Hablar</button>
+                </div>`;
             });
         }
 
-        // 4. LÓGICA DE CHAT P2P
-        function startChat(targetId, name) {
-            document.getElementById('chat-header').innerText = "Conectando con " + name + "...";
-            conn = peer.connect(targetId, { reliable: true });
-            setupChatEvents();
-            switchView('chat');
-        }
-
-        function setupChatEvents() {
+        function startChat(id) {
+            conn = peer.connect(id);
             conn.on('open', () => {
-                document.getElementById('chat-header').innerText = "Conectado con: " + conn.peer;
-                appendMsg("¡Sistema listo! Ya pueden chatear.", "in");
+                document.getElementById('chat-header').innerText = "Chat con: " + id;
+                switchView('chat');
             });
-            conn.on('data', (data) => appendMsg(data, "in"));
+            conn.on('data', (data) => appendMsg(data, 'in'));
         }
 
         function sendMsg() {
             const input = document.getElementById('chat-input');
             if (conn && conn.open && input.value) {
                 conn.send(input.value);
-                appendMsg(input.value, "out");
+                appendMsg(input.value, 'out');
                 input.value = "";
             }
         }
 
         function appendMsg(txt, type) {
-            const div = document.createElement('div');
-            div.className = "msg " + type;
-            div.innerText = txt;
-            document.getElementById('messages').appendChild(div);
+            const d = document.createElement('div');
+            d.className = "msg " + type;
+            d.innerText = txt;
+            document.getElementById('messages').appendChild(d);
             document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
         }
 
         function switchView(view) {
-            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-            document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
-            document.getElementById('view-' + view).classList.add('active');
-            document.getElementById('nav-' + view).classList.add('active');
+            document.getElementById('view-agenda').classList.toggle('active', view === 'agenda');
+            document.getElementById('view-chat').classList.toggle('active', view === 'chat');
+            document.getElementById('nav-agenda').classList.toggle('active', view === 'agenda');
+            document.getElementById('nav-chat').classList.toggle('active', view === 'chat');
         }
 
         renderContacts();
     </script>
 </body>
-  </html>
-              
+        </html>
+        

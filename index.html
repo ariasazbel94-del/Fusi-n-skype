@@ -3,190 +3,172 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Fusion Skype Pro</title>
+    <title>Fusion Chat P2P</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         :root { --bg: #0b0e11; --accent: #00aff0; --panel: #1c2226; --text: #ffffff; }
         body { margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 
-        /* --- NAVEGACIÓN INFERIOR --- */
+        /* --- NAVEGACIÓN --- */
         nav { 
-            position: fixed; bottom: 0; width: 100%; height: 60px; 
-            background: var(--panel); display: flex; justify-content: space-around; 
-            align-items: center; border-top: 1px solid #333; z-index: 1000;
+            height: 60px; background: var(--panel); display: flex; 
+            justify-content: space-around; align-items: center; border-top: 1px solid #333;
         }
-        nav button { background: none; border: none; color: #888; font-size: 12px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
-        nav button.active { color: var(--accent); }
-        nav i { font-size: 20px; font-style: normal; }
+        nav button { background: none; border: none; color: #888; font-size: 14px; cursor: pointer; }
+        nav button.active { color: var(--accent); font-weight: bold; }
 
         /* --- VISTAS --- */
-        .view { display: none; flex: 1; padding: 20px; overflow-y: auto; padding-bottom: 80px; }
+        .view { display: none; flex: 1; padding: 20px; overflow-y: auto; }
         .view.active { display: flex; flex-direction: column; }
 
         /* Agenda */
-        .contact-card { background: var(--panel); padding: 15px; border-radius: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid var(--accent); }
-        
-        /* Chat */
-        #msg-box { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
-        .bubble { padding: 10px; border-radius: 10px; max-width: 80%; font-size: 14px; word-wrap: break-word; }
-        .in { background: #252b30; align-self: flex-start; }
-        .out { background: var(--accent); align-self: flex-end; }
-        .chat-input { display: flex; gap: 10px; }
+        .card { background: var(--panel); padding: 15px; border-radius: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid var(--accent); }
+        input { background: #252b30; border: none; padding: 12px; color: white; border-radius: 8px; width: 100%; box-sizing: border-box; margin-bottom: 10px; }
+        .btn-main { background: var(--accent); border: none; color: white; padding: 12px; border-radius: 8px; width: 100%; font-weight: bold; }
 
-        /* Video */
-        #video-grid { position: relative; flex: 1; background: #000; border-radius: 15px; overflow: hidden; display: flex; align-items: center; }
-        #remote-v { width: 100%; height: 100%; object-fit: cover; }
-        #local-v { position: absolute; top: 15px; right: 15px; width: 100px; height: 140px; border: 2px solid white; border-radius: 10px; object-fit: cover; z-index: 10; }
-        .call-tools { display: flex; justify-content: center; gap: 20px; margin-top: 15px; }
+        /* Chat UI */
+        #chat-header { padding: 10px; background: var(--panel); border-radius: 8px; margin-bottom: 10px; text-align: center; font-size: 0.9em; color: var(--accent); }
+        #msg-wall { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-bottom: 10px; }
+        .bubble { padding: 10px 14px; border-radius: 15px; max-width: 75%; font-size: 15px; line-height: 1.4; word-wrap: break-word; }
+        .in { background: #2a2f32; align-self: flex-start; border-bottom-left-radius: 2px; }
+        .out { background: #005c4b; align-self: flex-end; border-bottom-right-radius: 2px; }
+
+        .chat-input-area { display: flex; gap: 8px; padding-top: 10px; }
     </style>
 </head>
 <body>
 
     <div id="view-agenda" class="view active">
-        <h3>Tu ID: <span id="display-id" style="color:var(--accent)">...</span></h3>
-        <div style="background:var(--panel); padding:15px; border-radius:10px; margin-bottom:20px;">
-            <input type="text" id="add-name" placeholder="Nombre (ej: Pedro)" style="width:100%; padding:10px; margin-bottom:10px; background:#252b30; border:none; color:white;">
-            <input type="text" id="add-id" placeholder="ID (ej: azbel_skype)" style="width:100%; padding:10px; margin-bottom:10px; background:#252b30; border:none; color:white;">
-            <button onclick="guardarContacto()" style="width:100%; background:var(--accent); color:white; border:none; padding:10px; border-radius:5px;">➕ Guardar en Agenda</button>
+        <h2 style="margin-top:0">Mi ID: <span id="my-id-display" style="color:var(--accent)">...</span></h2>
+        
+        <div style="margin-bottom: 25px;">
+            <input type="text" id="friend-name" placeholder="Nombre del contacto">
+            <input type="text" id="friend-id" placeholder="ID de PeerJS">
+            <button class="btn-main" onclick="saveContact()">➕ Agregar a Agenda</button>
         </div>
-        <div id="lista-contactos"></div>
+
+        <div id="contact-list"></div>
     </div>
 
     <div id="view-chat" class="view">
-        <h4 id="chatting-with">Sin conexión</h4>
-        <div id="msg-box"></div>
-        <div class="chat-input">
-            <input type="text" id="input-text" placeholder="Escribe...">
-            <button onclick="enviarMsg()" style="background:var(--accent); border:none; padding:10px 20px; color:white; border-radius:5px;">📤</button>
-        </div>
-    </div>
-
-    <div id="view-video" class="view">
-        <div id="video-grid">
-            <video id="remote-v" autoplay playsinline></video>
-            <video id="local-v" autoplay muted playsinline></video>
-        </div>
-        <div class="call-tools">
-            <button onclick="location.reload()" style="background:#ff3b30; border:none; color:white; padding:15px; border-radius:50%; width:60px; height:60px;">❌</button>
+        <div id="chat-header">Esperando conexión...</div>
+        <div id="msg-wall"></div>
+        <div class="chat-input-area">
+            <input type="text" id="chat-msg" placeholder="Escribe un mensaje..." style="margin:0">
+            <button onclick="sendMsg()" id="send-btn" style="background:var(--accent); border:none; width:50px; border-radius:8px; color:white;">📤</button>
         </div>
     </div>
 
     <nav>
-        <button onclick="showView('agenda')" id="btn-agenda" class="active"><i>👤</i>Agenda</button>
-        <button onclick="showView('chat')" id="btn-chat"><i>💬</i>Chat</button>
-        <button onclick="showView('video')" id="btn-video"><i>📹</i>Video</button>
+        <button onclick="showView('agenda')" id="nav-agenda" class="active">Contactos</button>
+        <button onclick="showView('chat')" id="nav-chat">Chat</button>
     </nav>
 
     <script>
-        let peer, conn, localStream;
-        const msgBox = document.getElementById('msg-box');
+        let peer, conn;
+        const chatHeader = document.getElementById('chat-header');
+        const msgWall = document.getElementById('msg-wall');
 
-        // ID FIJO
-        const miId = localStorage.getItem('fusion_skype_id') || prompt("Elige tu nombre de usuario:");
-        localStorage.setItem('fusion_skype_id', miId);
-        document.getElementById('display-id').innerText = miId;
+        // 1. INICIALIZAR IDENTIDAD
+        const myId = localStorage.getItem('chat_p2p_id') || prompt("Tu nombre de usuario:");
+        localStorage.setItem('chat_p2p_id', myId);
+        document.getElementById('my-id-display').innerText = myId;
 
-        // CONFIGURACIÓN DE SERVIDORES GOOGLE (Para conectar por internet)
-        peer = new Peer(miId, {
-            config: { 'iceServers': [{ url: 'stun:stun.l.google.com:19302' }] }
+        // Servidores STUN para que se encuentren por internet
+        peer = new Peer(myId, {
+            config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] }
         });
 
-        // ACTIVAR CÁMARA
-        navigator.mediaDevices.getUserMedia({video: true, audio: true}).then(s => {
-            localStream = s;
-            document.getElementById('local-v').srcObject = s;
-        }).catch(e => alert("Error de cámara: " + e));
-
-        // ESCUCHAR LLAMADAS Y MENSAJES
-        peer.on('connection', c => {
+        // 2. ESCUCHAR CONEXIÓN ENTRANTE (Si alguien me busca a mí)
+        peer.on('connection', (c) => {
             conn = c;
-            configurarEventosConn();
+            setupConnection();
             showView('chat');
         });
 
-        peer.on('call', call => {
-            if(confirm("¿Aceptar videollamada?")) {
-                call.answer(localStream);
-                call.on('stream', s => {
-                    document.getElementById('remote-v').srcObject = s;
-                    showView('video');
-                });
-            }
-        });
-
-        function showView(vName) {
-            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-            document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
-            document.getElementById('view-' + vName).classList.add('active');
-            document.getElementById('btn-' + vName).classList.add('active');
-        }
-
-        // AGENDA
-        function guardarContacto() {
-            const name = document.getElementById('add-name').value;
-            const id = document.getElementById('add-id').value;
+        // 3. FUNCIONES DE AGENDA
+        function saveContact() {
+            const name = document.getElementById('friend-name').value;
+            const id = document.getElementById('friend-id').value;
             if(!name || !id) return;
-            let list = JSON.parse(localStorage.getItem('fusion_contacts') || '[]');
+            let list = JSON.parse(localStorage.getItem('my_contacts') || '[]');
             list.push({name, id});
-            localStorage.setItem('fusion_contacts', JSON.stringify(list));
-            renderAgenda();
+            localStorage.setItem('my_contacts', JSON.stringify(list));
+            renderContacts();
         }
 
-        function renderAgenda() {
-            const list = JSON.parse(localStorage.getItem('fusion_contacts') || '[]');
-            const cont = document.getElementById('lista-contactos');
-            cont.innerHTML = "";
+        function renderContacts() {
+            const list = JSON.parse(localStorage.getItem('my_contacts') || '[]');
+            const container = document.getElementById('contact-list');
+            container.innerHTML = "<h4>Tus Amigos:</h4>";
             list.forEach(c => {
-                cont.innerHTML += `<div class="contact-card">
-                    <span><b>${c.name}</b><br><small>${c.id}</small></span>
-                    <button onclick="conectar('${c.id}', '${c.name}')" style="background:#28a745; border:none; color:white; padding:8px; border-radius:5px;">📞 Conectar</button>
-                </div>`;
+                container.innerHTML += `
+                    <div class="card">
+                        <span><b>${c.name}</b><br><small>${c.id}</small></span>
+                        <button onclick="startChat('${c.id}', '${c.name}')" style="background:#28a745; border:none; color:white; padding:8px 15px; border-radius:5px;">Chatear</button>
+                    </div>
+                `;
             });
         }
 
-        // CONECTAR
-        function conectar(id, name) {
-            document.getElementById('chatting-with').innerText = "Conectado con: " + name;
-            // 1. Llamada de Video
-            const call = peer.call(id, localStream);
-            call.on('stream', s => {
-                document.getElementById('remote-v').srcObject = s;
-            });
-            // 2. Conexión de Chat
-            conn = peer.connect(id);
-            configurarEventosConn();
-            showView('video');
+        // 4. INICIAR CHAT (Yo busco a alguien)
+        function startChat(targetId, name) {
+            chatHeader.innerText = "Conectando con " + name + "...";
+            conn = peer.connect(targetId, { reliable: true });
+            setupConnection();
+            showView('chat');
         }
 
-        function configurarEventosConn() {
+        // 5. CONFIGURAR EL CANAL DE DATOS
+        function setupConnection() {
             conn.on('open', () => {
-                addBubble("¡Chat listo!", "in");
+                chatHeader.innerText = "Conectado con: " + conn.peer;
+                chatHeader.style.color = "#28a745";
+                addBubble("¡Conexión establecida! Ya pueden chatear.", "in");
             });
-            conn.on('data', data => {
+
+            conn.on('data', (data) => {
                 addBubble(data, 'in');
             });
+
+            conn.on('close', () => {
+                chatHeader.innerText = "Conexión perdida";
+                chatHeader.style.color = "red";
+            });
         }
 
-        function enviarMsg() {
-            const txt = document.getElementById('input-text').value;
-            if(conn && conn.open) {
-                conn.send(txt);
-                addBubble(txt, 'out');
-                document.getElementById('input-text').value = "";
+        // 6. ENVIAR Y MOSTRAR MENSAJES
+        function sendMsg() {
+            const input = document.getElementById('chat-msg');
+            const text = input.value;
+            if(conn && conn.open && text) {
+                conn.send(text);
+                addBubble(text, 'out');
+                input.value = "";
             } else {
-                alert("La conexión no está lista. Espera un momento.");
+                alert("Espera a que la conexión esté lista.");
             }
         }
 
-        function addBubble(t, type) {
-            const d = document.createElement('div');
-            d.className = 'bubble ' + type;
-            d.innerText = t;
-            msgBox.appendChild(d);
-            msgBox.scrollTop = msgBox.scrollHeight;
+        function addBubble(text, type) {
+            const b = document.createElement('div');
+            b.className = `bubble ${type}`;
+            b.innerText = text;
+            msgWall.appendChild(b);
+            msgWall.scrollTop = msgWall.scrollHeight;
         }
 
-        renderAgenda();
+        function showView(view) {
+            document.getElementById('view-agenda').classList.remove('active');
+            document.getElementById('view-chat').classList.remove('active');
+            document.getElementById('nav-agenda').classList.remove('active');
+            document.getElementById('nav-chat').classList.remove('active');
+            
+            document.getElementById('view-' + view).classList.add('active');
+            document.getElementById('nav-' + view).classList.add('active');
+        }
+
+        renderContacts();
     </script>
 </body>
 </html>

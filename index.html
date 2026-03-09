@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fusion Skype P2P</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        body { margin: 0; background: #0b0e11; color: white; font-family: sans-serif; }
+        #setup-panel { padding: 20px; text-align: center; }
+        video { width: 100%; height: 40vh; background: #000; object-fit: cover; margin-top: 10px; }
+        .controls { padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+        input { padding: 12px; border-radius: 8px; border: none; background: #252b30; color: white; }
+        button { padding: 12px; border-radius: 8px; border: none; background: #00aff0; color: white; font-weight: bold; }
+        #remote-video { height: 50vh; border-bottom: 2px solid #00aff0; }
+        #local-video { height: 20vh; position: absolute; bottom: 150px; right: 10px; width: 30%; border: 2px solid white; border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+    <div id="setup-panel">
+        <h3>Tu ID: <span id="my-display-id">...</span></h3>
+        <div class="controls">
+            <input type="text" id="peer-id-input" placeholder="ID del amigo a llamar">
+            <button onclick="llamar()">📞 Iniciar Llamada</button>
+        </div>
+    </div>
+
+    <video id="remote-video" autoplay playsinline></video>
+    <video id="local-video" autoplay muted playsinline></video>
+
+    <script>
+        let peer;
+        let localStream;
+        const myIdDisplay = document.getElementById('my-display-id');
+        const remoteVideo = document.getElementById('remote-video');
+        const localVideo = document.getElementById('local-video');
+
+        // 1. GENERAR O RECUPERAR ID FIJO
+        let miIdFijo = localStorage.getItem('fusion_skype_id');
+        if (!miIdFijo) {
+            miIdFijo = prompt("Elige tu nombre de usuario para Skype (ej: azbel2026):");
+            localStorage.setItem('fusion_skype_id', miIdFijo);
+        }
+        myIdDisplay.innerText = miIdFijo;
+
+        // 2. INICIALIZAR CONEXIÓN
+        peer = new Peer(miIdFijo);
+
+        // Activar mi cámara de inmediato
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
+            localStream = stream;
+            localVideo.srcObject = stream;
+        });
+
+        // 3. RECIBIR LLAMADA (Cuando alguien me llama)
+        peer.on('call', call => {
+            if(confirm("¿Aceptar llamada entrante?")) {
+                call.answer(localStream); // Envío mi video
+                call.on('stream', userRemoteStream => {
+                    remoteVideo.srcObject = userRemoteStream; // Veo el video del otro
+                });
+            }
+        });
+
+        // 4. HACER LLAMADA (Cuando yo llamo a alguien)
+        function llamar() {
+            const idDestino = document.getElementById('peer-id-input').value;
+            const call = peer.call(idDestino, localStream);
+            call.on('stream', userRemoteStream => {
+                remoteVideo.srcObject = userRemoteStream;
+            });
+        }
+    </script>
+</body>
+  </html>
+    

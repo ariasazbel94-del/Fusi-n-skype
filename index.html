@@ -2,173 +2,79 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Fusion Chat P2P</title>
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fusion Chat - Firebase Motor</title>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
     <style>
-        :root { --bg: #0b0e11; --accent: #00aff0; --panel: #1c2226; --text: #ffffff; }
-        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-
-        /* --- NAVEGACIÓN --- */
-        nav { 
-            height: 60px; background: var(--panel); display: flex; 
-            justify-content: space-around; align-items: center; border-top: 1px solid #333;
-        }
-        nav button { background: none; border: none; color: #888; font-size: 14px; cursor: pointer; }
-        nav button.active { color: var(--accent); font-weight: bold; }
-
-        /* --- VISTAS --- */
-        .view { display: none; flex: 1; padding: 20px; overflow-y: auto; }
-        .view.active { display: flex; flex-direction: column; }
-
-        /* Agenda */
-        .card { background: var(--panel); padding: 15px; border-radius: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid var(--accent); }
-        input { background: #252b30; border: none; padding: 12px; color: white; border-radius: 8px; width: 100%; box-sizing: border-box; margin-bottom: 10px; }
-        .btn-main { background: var(--accent); border: none; color: white; padding: 12px; border-radius: 8px; width: 100%; font-weight: bold; }
-
-        /* Chat UI */
-        #chat-header { padding: 10px; background: var(--panel); border-radius: 8px; margin-bottom: 10px; text-align: center; font-size: 0.9em; color: var(--accent); }
-        #msg-wall { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-bottom: 10px; }
-        .bubble { padding: 10px 14px; border-radius: 15px; max-width: 75%; font-size: 15px; line-height: 1.4; word-wrap: break-word; }
-        .in { background: #2a2f32; align-self: flex-start; border-bottom-left-radius: 2px; }
-        .out { background: #005c4b; align-self: flex-end; border-bottom-right-radius: 2px; }
-
-        .chat-input-area { display: flex; gap: 8px; padding-top: 10px; }
+        :root { --bg: #0b0e11; --accent: #00aff0; --panel: #1c2226; }
+        body { margin: 0; font-family: sans-serif; background: var(--bg); color: white; display: flex; flex-direction: column; height: 100vh; }
+        #chat-window { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+        .msg { padding: 10px 15px; border-radius: 15px; max-width: 70%; font-size: 14px; }
+        .out { background: var(--accent); align-self: flex-end; }
+        .in { background: #2a2f32; align-self: flex-start; }
+        .input-area { padding: 15px; background: var(--panel); display: flex; gap: 10px; }
+        input { flex: 1; padding: 12px; border-radius: 20px; border: none; background: #252b30; color: white; outline: none; }
+        button { background: var(--accent); border: none; color: white; padding: 10px 20px; border-radius: 20px; font-weight: bold; }
+        #status { font-size: 12px; text-align: center; padding: 5px; color: #888; }
     </style>
 </head>
 <body>
 
-    <div id="view-agenda" class="view active">
-        <h2 style="margin-top:0">Mi ID: <span id="my-id-display" style="color:var(--accent)">...</span></h2>
-        
-        <div style="margin-bottom: 25px;">
-            <input type="text" id="friend-name" placeholder="Nombre del contacto">
-            <input type="text" id="friend-id" placeholder="ID de PeerJS">
-            <button class="btn-main" onclick="saveContact()">➕ Agregar a Agenda</button>
-        </div>
+    <div id="status">Conectado al motor Firebase</div>
+    <div id="chat-window"></div>
 
-        <div id="contact-list"></div>
+    <div class="input-area">
+        <input type="text" id="mensaje-txt" placeholder="Escribe un mensaje...">
+        <button onclick="enviar()">📤</button>
     </div>
-
-    <div id="view-chat" class="view">
-        <div id="chat-header">Esperando conexión...</div>
-        <div id="msg-wall"></div>
-        <div class="chat-input-area">
-            <input type="text" id="chat-msg" placeholder="Escribe un mensaje..." style="margin:0">
-            <button onclick="sendMsg()" id="send-btn" style="background:var(--accent); border:none; width:50px; border-radius:8px; color:white;">📤</button>
-        </div>
-    </div>
-
-    <nav>
-        <button onclick="showView('agenda')" id="nav-agenda" class="active">Contactos</button>
-        <button onclick="showView('chat')" id="nav-chat">Chat</button>
-    </nav>
 
     <script>
-        let peer, conn;
-        const chatHeader = document.getElementById('chat-header');
-        const msgWall = document.getElementById('msg-wall');
+        // 1. CONFIGURACIÓN DEL MOTOR (Pon aquí tus credenciales de Firebase)
+        const firebaseConfig = {
+            apiKey: "TU_API_KEY",
+            databaseURL: "https://TU_PROYECTO.firebaseio.com",
+            projectId: "TU_PROYECTO_ID",
+        };
 
-        // 1. INICIALIZAR IDENTIDAD
-        const myId = localStorage.getItem('chat_p2p_id') || prompt("Tu nombre de usuario:");
-        localStorage.setItem('chat_p2p_id', myId);
-        document.getElementById('my-id-display').innerText = myId;
+        // Inicializar
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
 
-        // Servidores STUN para que se encuentren por internet
-        peer = new Peer(myId, {
-            config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] }
+        // 2. IDENTIFICACIÓN
+        const miNombre = localStorage.getItem('chat_nombre') || prompt("Tu nombre:");
+        localStorage.setItem('chat_nombre', miNombre);
+        
+        // Sala de chat (puedes cambiar 'general' por un nombre de sala privada)
+        const salaChat = db.ref('chats/sala_general');
+
+        // 3. RECIBIR MENSAJES EN TIEMPO REAL
+        salaChat.limitToLast(20).on('child_added', (snapshot) => {
+            const data = snapshot.val();
+            mostrarMensaje(data.texto, data.autor === miNombre ? 'out' : 'in');
         });
 
-        // 2. ESCUCHAR CONEXIÓN ENTRANTE (Si alguien me busca a mí)
-        peer.on('connection', (c) => {
-            conn = c;
-            setupConnection();
-            showView('chat');
-        });
+        // 4. ENVIAR MENSAJE AL MOTOR
+        function enviar() {
+            const input = document.getElementById('mensaje-txt');
+            if (input.value.trim() === "") return;
 
-        // 3. FUNCIONES DE AGENDA
-        function saveContact() {
-            const name = document.getElementById('friend-name').value;
-            const id = document.getElementById('friend-id').value;
-            if(!name || !id) return;
-            let list = JSON.parse(localStorage.getItem('my_contacts') || '[]');
-            list.push({name, id});
-            localStorage.setItem('my_contacts', JSON.stringify(list));
-            renderContacts();
-        }
-
-        function renderContacts() {
-            const list = JSON.parse(localStorage.getItem('my_contacts') || '[]');
-            const container = document.getElementById('contact-list');
-            container.innerHTML = "<h4>Tus Amigos:</h4>";
-            list.forEach(c => {
-                container.innerHTML += `
-                    <div class="card">
-                        <span><b>${c.name}</b><br><small>${c.id}</small></span>
-                        <button onclick="startChat('${c.id}', '${c.name}')" style="background:#28a745; border:none; color:white; padding:8px 15px; border-radius:5px;">Chatear</button>
-                    </div>
-                `;
+            salaChat.push({
+                autor: miNombre,
+                texto: input.value,
+                fecha: Date.now()
             });
+            input.value = "";
         }
 
-        // 4. INICIAR CHAT (Yo busco a alguien)
-        function startChat(targetId, name) {
-            chatHeader.innerText = "Conectando con " + name + "...";
-            conn = peer.connect(targetId, { reliable: true });
-            setupConnection();
-            showView('chat');
+        function mostrarMensaje(texto, clase) {
+            const win = document.getElementById('chat-window');
+            const div = document.createElement('div');
+            div.className = `msg ${clase}`;
+            div.innerText = texto;
+            win.appendChild(div);
+            win.scrollTop = win.scrollHeight;
         }
-
-        // 5. CONFIGURAR EL CANAL DE DATOS
-        function setupConnection() {
-            conn.on('open', () => {
-                chatHeader.innerText = "Conectado con: " + conn.peer;
-                chatHeader.style.color = "#28a745";
-                addBubble("¡Conexión establecida! Ya pueden chatear.", "in");
-            });
-
-            conn.on('data', (data) => {
-                addBubble(data, 'in');
-            });
-
-            conn.on('close', () => {
-                chatHeader.innerText = "Conexión perdida";
-                chatHeader.style.color = "red";
-            });
-        }
-
-        // 6. ENVIAR Y MOSTRAR MENSAJES
-        function sendMsg() {
-            const input = document.getElementById('chat-msg');
-            const text = input.value;
-            if(conn && conn.open && text) {
-                conn.send(text);
-                addBubble(text, 'out');
-                input.value = "";
-            } else {
-                alert("Espera a que la conexión esté lista.");
-            }
-        }
-
-        function addBubble(text, type) {
-            const b = document.createElement('div');
-            b.className = `bubble ${type}`;
-            b.innerText = text;
-            msgWall.appendChild(b);
-            msgWall.scrollTop = msgWall.scrollHeight;
-        }
-
-        function showView(view) {
-            document.getElementById('view-agenda').classList.remove('active');
-            document.getElementById('view-chat').classList.remove('active');
-            document.getElementById('nav-agenda').classList.remove('active');
-            document.getElementById('nav-chat').classList.remove('active');
-            
-            document.getElementById('view-' + view).classList.add('active');
-            document.getElementById('nav-' + view).classList.add('active');
-        }
-
-        renderContacts();
     </script>
 </body>
 </html>
